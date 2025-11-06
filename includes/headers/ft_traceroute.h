@@ -59,16 +59,24 @@ typedef struct s_traceroute_stats
 typedef struct s_options
 {
 	bool help;
+	int max_hops;		// Maximum TTL (default 30)
+	int first_ttl;		// Starting TTL (default 1)
+	int nqueries;		// Number of probes per hop (default 3)
+	int waittime;		// Timeout in seconds (default 5)
+	int port;			// Base destination port (default 33434)
 } t_options;
 
 typedef struct s_traceroute
 {
 	char *ip_address;
 	char *hostname;
-	int sockfd;
+	int sockfd;			// ICMP receive socket
+	int send_sockfd;	// UDP send socket
 	struct sockaddr_in dest_addr;
 	uint16_t identifier;
 	uint16_t sequence;
+	int current_ttl;	// Current TTL being tested
+	int dest_port;		// Current destination port
 	t_traceroute_stats stats;
 } t_traceroute;
 
@@ -81,6 +89,14 @@ void initialize_program(t_options *options, t_traceroute *traceroute);
 void print_options(t_options *options);
 void print_help();
 int parse_options(int argc, char **argv, t_traceroute *traceroute, t_options *options);
+
+// socket.c
+int create_icmp_socket(void);
+int create_udp_socket(void);
+void close_socket(int sockfd);
+int resolve_address(t_traceroute *traceroute);
+int set_socket_ttl(int sockfd, int ttl);
+int set_socket_timeout(int sockfd, int seconds);
 
 // exec.c
 int exec_traceroute(t_traceroute *traceroute, t_options *options);

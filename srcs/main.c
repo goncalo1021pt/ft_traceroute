@@ -8,10 +8,10 @@ int main(int argc, char **argv)
     t_options options;
 
     initialize_program(&options, &traceroute);
-    if (parse_options(argc, argv, &traceroute, &options) != 0) {
+    exit_code = parse_options(argc, argv, &traceroute, &options);
+    if (exit_code != 0) {
         print_help();
         return 1;
     }
-    exit_code = exec_traceroute(&traceroute, &options);
-    return exit_code;
+    return exec_traceroute(&traceroute, &options);
 }
