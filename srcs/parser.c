@@ -4,14 +4,12 @@ void initialize_program(t_options *options, t_traceroute *traceroute) {
     ft_bzero(options, sizeof(t_options));
 	ft_bzero(traceroute, sizeof(t_traceroute));
 	
-	// Set default options
-	options->max_hops = 30;		// Default max TTL
-	options->first_ttl = 1;		// Start at TTL 1
-	options->nqueries = 3;		// 3 probes per hop
-	options->waittime = 5;		// 5 second timeout
-	options->port = 33434;		// Standard traceroute port
+	options->max_hops = 30;
+	options->first_ttl = 1;
+	options->nqueries = 3;
+	options->waittime = 1;
+	options->port = 33434;
 	
-	// Initialize traceroute structure
 	traceroute->sockfd = -1;
 	traceroute->send_sockfd = -1;
 	traceroute->identifier = getpid() & 0xFFFF;
