@@ -43,45 +43,72 @@ int receive_single_reply(t_traceroute *traceroute, t_options *options, struct so
 	unsigned char buffer[1024];
 	ssize_t bytes_received;
 	socklen_t from_len = sizeof(*from);
-	struct timeval recv_time, timeout;
+	struct timeval recv_time, timeout, start_time;
 	fd_set readfds;
 	int ret;
 	struct icmphdr *icmp;
 	
-	FD_ZERO(&readfds);
-	FD_SET(traceroute->sockfd, &readfds);
-	
-	timeout.tv_sec = options->waittime;
-	timeout.tv_usec = 0;
-	
-	ret = select(traceroute->sockfd + 1, &readfds, NULL, NULL, &timeout);
-	if (ret < 0) {
-		perror("select");
-		return -1;
-	}
-	
-	if (ret == 0) {
-		return -1;
-	}
-	gettimeofday(&recv_time, NULL);
-	bytes_received = recvfrom(traceroute->sockfd, buffer, sizeof(buffer), 0, (struct sockaddr *)from, &from_len);
+	gettimeofday(&start_time, NULL);
 
-	if (bytes_received < 0) {
-		perror("recvfrom");
-		return -1;
+	while (1)
+	{
+		FD_ZERO(&readfds);
+		FD_SET(traceroute->sockfd, &readfds);
+
+		struct timeval now, elapsed;
+		gettimeofday(&now, NULL);
+		timersub(&now, &start_time, &elapsed);
+		
+		timeout.tv_sec = options->waittime - elapsed.tv_sec;
+		timeout.tv_usec = -elapsed.tv_usec;
+		
+		if (timeout.tv_usec < 0) {
+			timeout.tv_sec--;
+			timeout.tv_usec += 1000000;
+		}
+
+		if (timeout.tv_sec < 0)
+			return -1;
+
+		ret = select(traceroute->sockfd + 1, &readfds, NULL, NULL, &timeout);
+		if (ret <= 0) {
+			if (ret < 0)
+				perror("select");
+			return -1;
+		}
+		
+		gettimeofday(&recv_time, NULL);
+		bytes_received = recvfrom(traceroute->sockfd, buffer, sizeof(buffer), 0, (struct sockaddr *)from, &from_len);
+		if (bytes_received < 0) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+				continue;
+			perror("recvfrom");
+			return -1;
+		}
+		
+		struct ip *ip_hdr = (struct ip *)buffer;
+		int ip_hdr_len = ip_hdr->ip_hl << 2;
+		
+		icmp = (struct icmphdr *)(buffer + ip_hdr_len);
+		
+		if (icmp->type == ICMP_TIME_EXCEEDED || icmp->type == ICMP_DEST_UNREACH) {
+			struct ip *orig_ip = (struct ip *)((char *)icmp + sizeof(struct icmphdr));
+
+			if (orig_ip->ip_p == IPPROTO_UDP) {
+				struct udphdr *orig_udp = (struct udphdr *)((char *)orig_ip + (orig_ip->ip_hl << 2));
+				uint16_t orig_port = ntohs(orig_udp->uh_dport);
+
+				if (orig_port >= traceroute->dest_port && 
+					orig_port < traceroute->dest_port + 100) {
+					*rtt = (recv_time.tv_sec - traceroute->stats.last_send_time.tv_sec) * 1000.0 +
+						   (recv_time.tv_usec - traceroute->stats.last_send_time.tv_usec) / 1000.0;
+					
+					traceroute->stats.packets_received++;
+					return icmp->type;
+				}
+			}
+		}
 	}
-	
-	struct ip *ip_hdr = (struct ip *)buffer;
-	int ip_hdr_len = ip_hdr->ip_hl << 2;
-	
-	icmp = (struct icmphdr *)(buffer + ip_hdr_len);
-	
-	*rtt = (recv_time.tv_sec - traceroute->stats.last_send_time.tv_sec) * 1000.0 +
-		   (recv_time.tv_usec - traceroute->stats.last_send_time.tv_usec) / 1000.0;
-	
-	traceroute->stats.packets_received++;
-	
-	return icmp->type;
 }
 
 int send_probes(t_traceroute *traceroute, t_options *options) {

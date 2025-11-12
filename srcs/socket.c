@@ -54,23 +54,6 @@ int set_socket_timeout(int sockfd, int seconds) {
 	return 0;
 }
 
-int set_socket_nonblocking(int sockfd) {
-	int flags;
-	
-	flags = fcntl(sockfd, F_GETFL, 0);
-	if (flags < 0) {
-		perror("ft_traceroute: fcntl F_GETFL failed");
-		return -1;
-	}
-	
-	if (fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) < 0) {
-		perror("ft_traceroute: fcntl F_SETFL failed");
-		return -1;
-	}
-	
-	return 0;
-}
-
 int resolve_address(t_traceroute *traceroute) {
 	struct addrinfo hints, *result;
 	int status;
