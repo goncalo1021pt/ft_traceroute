@@ -53,3 +53,16 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Project build output
+/ft_traceroute
+/objs/
+includes/libft/libft.a
+
+# Subject
+en.subject.pdf
+
+# Editor / OS
+.DS_Store
+*.swp
+*~

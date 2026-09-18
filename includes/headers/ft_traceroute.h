@@ -21,6 +21,11 @@
 #define ICMP_HEADER_SIZE 8
 #define DATA_SIZE (PACKET_SIZE - ICMP_HEADER_SIZE)
 
+typedef enum e_long_options
+{
+	OPT_HELP = 1000
+} t_long_options;
+
 typedef struct s_traceroute_stats
 {
 	int packets_sent;
@@ -36,6 +41,11 @@ typedef struct s_options
 	int nqueries;
 	int waittime;
 	int port;
+	int squeries;
+	char *interface;
+	char *src_addr;
+	char *tos;
+	char *flowlabel;
 } t_options;
 
 typedef struct s_traceroute
