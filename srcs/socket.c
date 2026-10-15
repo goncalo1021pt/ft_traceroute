@@ -43,10 +43,10 @@ int set_socket_ttl(int sockfd, int ttl) {
 
 int set_socket_timeout(int sockfd, int seconds) {
 	struct timeval timeout;
-	
+
 	timeout.tv_sec = seconds;
 	timeout.tv_usec = 0;
-	
+
 	if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
 		perror("ft_traceroute: setsockopt timeout failed");
 		return -1;
@@ -59,7 +59,7 @@ int resolve_address(t_traceroute *traceroute) {
 	int status;
 	memset(&traceroute->dest_addr, 0, sizeof(traceroute->dest_addr));
 	traceroute->dest_addr.sin_family = AF_INET;
-	
+
 	if (inet_aton(traceroute->ip_address, &traceroute->dest_addr.sin_addr) != 0) {
 		traceroute->hostname = traceroute->ip_address;
 		return 0;
@@ -71,11 +71,13 @@ int resolve_address(t_traceroute *traceroute) {
 	status = getaddrinfo(traceroute->ip_address, NULL, &hints, &result);
 	if (status != 0) {
 		ft_fprintf(2, "%s: Name or service not known\n", traceroute->ip_address);
-		ft_fprintf(2, "Cannot handle \"host\" cmdline arg '%s' on position 1 (argc 1)\n", traceroute->ip_address);
+		ft_fprintf(2, "Cannot handle \"host\" cmdline arg '%s' on position 1 (argc 1)\n",
+		           traceroute->ip_address);
 		return -1;
 	}
-	struct sockaddr_in *addr_in = (struct sockaddr_in *)result->ai_addr;
-	memcpy(&traceroute->dest_addr.sin_addr, &addr_in->sin_addr, sizeof(traceroute->dest_addr.sin_addr));
+	const struct sockaddr_in *addr_in = (struct sockaddr_in *)result->ai_addr;
+	memcpy(&traceroute->dest_addr.sin_addr, &addr_in->sin_addr,
+	       sizeof(traceroute->dest_addr.sin_addr));
 	traceroute->hostname = traceroute->ip_address;
 	freeaddrinfo(result);
 	return 0;

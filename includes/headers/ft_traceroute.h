@@ -17,25 +17,22 @@
 #include <errno.h>
 #include "../libft/libft.h"
 
-#define PACKET_SIZE 64
-#define MAX_QUERIES 10
+#define PACKET_SIZE      64
+#define MAX_QUERIES      10
 #define ICMP_HEADER_SIZE 8
-#define DATA_SIZE (PACKET_SIZE - ICMP_HEADER_SIZE)
+#define DATA_SIZE        (PACKET_SIZE - ICMP_HEADER_SIZE)
 
-typedef enum e_long_options
-{
+typedef enum e_long_options {
 	OPT_HELP = 1000
 } t_long_options;
 
-typedef struct s_traceroute_stats
-{
+typedef struct s_traceroute_stats {
 	int packets_sent;
 	int packets_received;
 	struct timeval last_send_time;
 } t_traceroute_stats;
 
-typedef struct s_options
-{
+typedef struct s_options {
 	bool help;
 	int max_hops;
 	int first_ttl;
@@ -49,8 +46,7 @@ typedef struct s_options
 	char *flowlabel;
 } t_options;
 
-typedef struct s_traceroute
-{
+typedef struct s_traceroute {
 	char *ip_address;
 	char *hostname;
 	int sockfd;
@@ -65,8 +61,9 @@ typedef struct s_traceroute
 
 // parser.c
 void initialize_program(t_options *options, t_traceroute *traceroute);
+void free_options(t_options *options);
 void print_options(t_options *options);
-void print_help();
+void print_help(void);
 int parse_options(int argc, char **argv, t_traceroute *traceroute, t_options *options);
 
 // socket.c
@@ -81,6 +78,6 @@ int set_socket_timeout(int sockfd, int seconds);
 int exec_traceroute(t_traceroute *traceroute, t_options *options);
 
 // probes.c
-int send_probes(t_traceroute *traceroute, t_options *options);
+int send_probes(t_traceroute *traceroute, const t_options *options);
 
 #endif

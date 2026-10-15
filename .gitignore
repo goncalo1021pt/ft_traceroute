@@ -56,7 +56,11 @@ dkms.conf
 
 # Project build output
 /ft_traceroute
+/ft_traceroute_asan
 /objs/
+/objs_asan/
+/tests/unit/run_unit
+vg.log
 includes/libft/libft.a
 
 # Subject
