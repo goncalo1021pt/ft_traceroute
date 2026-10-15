@@ -1,18 +1,15 @@
 #include "ft_traceroute.h"
 
-void print_traceroute_header(t_traceroute *traceroute, t_options *options) {
+void print_traceroute_header(t_traceroute *traceroute, const t_options *options) {
 	char ip_str[INET_ADDRSTRLEN];
-	
+
 	inet_ntop(AF_INET, &traceroute->dest_addr.sin_addr, ip_str, sizeof(ip_str));
-	
-	ft_printf("ft_traceroute to %s (%s), %d hops max, %d byte packets\n",
-			  traceroute->hostname,
-			  ip_str,
-			  options->max_hops,
-			  PACKET_SIZE);
+
+	ft_printf("ft_traceroute to %s (%s), %d hops max, %d byte packets\n", traceroute->hostname,
+	          ip_str, options->max_hops, PACKET_SIZE);
 }
 
-int init_traceroute(t_traceroute *traceroute, t_options *options) {
+int init_traceroute(t_traceroute *traceroute, const t_options *options) {
 
 	if (resolve_address(traceroute) != 0)
 		return -1;
@@ -39,11 +36,11 @@ int init_traceroute(t_traceroute *traceroute, t_options *options) {
 	return 0;
 }
 
-int perform_traceroute(t_traceroute *traceroute, t_options *options) {
+int perform_traceroute(t_traceroute *traceroute, const t_options *options) {
 	int reached_dest = 0;
-	
+
 	print_traceroute_header(traceroute, options);
-	
+
 	while (traceroute->current_ttl <= options->max_hops && !reached_dest) {
 		reached_dest = send_probes(traceroute, options);
 		traceroute->current_ttl++;
@@ -53,7 +50,7 @@ int perform_traceroute(t_traceroute *traceroute, t_options *options) {
 
 void clear_traceroute(t_traceroute *traceroute, t_options *options) {
 	(void)options;
-	
+
 	close_socket(traceroute->sockfd);
 	close_socket(traceroute->send_sockfd);
 
@@ -62,7 +59,7 @@ void clear_traceroute(t_traceroute *traceroute, t_options *options) {
 }
 
 int exec_traceroute(t_traceroute *traceroute, t_options *options) {
-	
+
 	if (init_traceroute(traceroute, options))
 		return -1;
 	perform_traceroute(traceroute, options);
