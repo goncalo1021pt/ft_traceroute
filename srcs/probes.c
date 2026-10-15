@@ -1,18 +1,18 @@
 #include "ft_traceroute.h"
 
-void get_hostname(struct sockaddr_in *addr, char *hostname, size_t len, char *ip_str) {
+void get_hostname(const struct sockaddr_in *addr, char *hostname, size_t len, char *ip_str) {
 	int ret;
 
-	ret = getnameinfo((struct sockaddr *)addr, (socklen_t)sizeof(*addr), hostname, (socklen_t)len,
-	                  NULL, 0, 0);
+	ret = getnameinfo((const struct sockaddr *)addr, (socklen_t)sizeof(*addr), hostname,
+	                  (socklen_t)len, NULL, 0, 0);
 
 	if (ret != 0 || strcmp(hostname, ip_str) == 0) {
 		ft_strcpy(hostname, ip_str);
 	}
 }
 
-int send_single_probe(t_traceroute *traceroute) {
-	char packet[PACKET_SIZE];
+int send_single_probe(t_traceroute *traceroute, t_probe *probe) {
+	char packet[PAYLOAD_SIZE];
 	struct sockaddr_in dest;
 	ssize_t sent;
 
@@ -27,7 +27,7 @@ int send_single_probe(t_traceroute *traceroute) {
 	ft_bzero(packet, sizeof(packet));
 	*(uint16_t *)packet = htons(traceroute->sequence);
 
-	gettimeofday(&traceroute->stats.last_send_time, NULL);
+	gettimeofday(&probe->sent, NULL);
 
 	sent = sendto(traceroute->send_sockfd, packet, sizeof(packet), 0, (struct sockaddr *)&dest,
 	              sizeof(dest));
@@ -41,8 +41,11 @@ int send_single_probe(t_traceroute *traceroute) {
 	return 0;
 }
 
-int receive_single_reply(t_traceroute *traceroute, const t_options *options,
-                         struct sockaddr_in *from, double *rtt) {
+/* Waits for the reply to `probe` and stores who answered and the RTT in it.
+ * Returns the ICMP type, or -1 on timeout. The RTT is taken the moment the packet
+ * arrives, before anything slow (like a reverse DNS lookup) can happen. */
+int receive_single_reply(t_traceroute *traceroute, const t_options *options, t_probe *probe) {
+	struct sockaddr_in *from = &probe->from;
 	unsigned char buffer[1024];
 	socklen_t from_len = sizeof(*from);
 	struct timeval recv_time, timeout, start_time;
@@ -101,10 +104,8 @@ int receive_single_reply(t_traceroute *traceroute, const t_options *options,
 				uint16_t orig_port = ntohs(orig_udp->uh_dport);
 
 				if (orig_port >= traceroute->dest_port && orig_port < traceroute->dest_port + 100) {
-					*rtt = (double)(recv_time.tv_sec - traceroute->stats.last_send_time.tv_sec) *
-					           1000.0 +
-					       (double)(recv_time.tv_usec - traceroute->stats.last_send_time.tv_usec) /
-					           1000.0;
+					probe->rtt = (double)(recv_time.tv_sec - probe->sent.tv_sec) * 1000.0 +
+					             (double)(recv_time.tv_usec - probe->sent.tv_usec) / 1000.0;
 
 					traceroute->stats.packets_received++;
 					return icmp->type;
@@ -114,63 +115,61 @@ int receive_single_reply(t_traceroute *traceroute, const t_options *options,
 	}
 }
 
-int send_probes(t_traceroute *traceroute, const t_options *options) {
-	int i;
-	int reached_dest = 0;
-	struct timeval send_times[MAX_QUERIES];
+/* Prints the results of one hop. All the measuring is already done here, so the
+ * (possibly slow) hostname lookups cannot change any RTT. */
+static void print_hop_results(const t_probe *probes, int nprobes) {
+	char last_ip[INET_ADDRSTRLEN] = {0};
+	bool previous_was_star = false;
 
-	if (traceroute->current_ttl < 10)
-		printf(" %d  ", traceroute->current_ttl);
-	else
-		printf("%d  ", traceroute->current_ttl);
+	for (int i = 0; i < nprobes; i++) {
+		const t_probe *probe = &probes[i];
+		bool is_star = !probe->replied;
 
-	for (i = 0; i < options->nqueries; i++) {
-		if (send_single_probe(traceroute) < 0) {
-			send_times[i].tv_sec = 0;
-			send_times[i].tv_usec = 0;
+		if (i == 0)
+			printf("  ");
+		else
+			printf(is_star || previous_was_star ? " " : "  ");
+		if (is_star) {
+			printf("*");
 		} else {
-			send_times[i] = traceroute->stats.last_send_time;
-		}
-	}
+			char ip_str[INET_ADDRSTRLEN];
 
-	for (i = 0; i < options->nqueries; i++) {
-		struct sockaddr_in from;
-		double rtt;
-		int icmp_type;
-		char ip_str[INET_ADDRSTRLEN];
-		char hostname[NI_MAXHOST];
-		static char last_ip[INET_ADDRSTRLEN] = {0};
-		static int first_response = 1;
+			inet_ntop(AF_INET, &probe->from.sin_addr, ip_str, sizeof(ip_str));
+			if (strcmp(ip_str, last_ip) != 0) {
+				char hostname[NI_MAXHOST];
 
-		if (send_times[i].tv_sec == 0) {
-			printf("* ");
-			continue;
-		}
-
-		traceroute->stats.last_send_time = send_times[i];
-
-		icmp_type = receive_single_reply(traceroute, options, &from, &rtt);
-
-		if (icmp_type < 0) {
-			printf("* ");
-			first_response = 1;
-		} else {
-			inet_ntop(AF_INET, &from.sin_addr, ip_str, sizeof(ip_str));
-
-			if (first_response || strcmp(ip_str, last_ip) != 0) {
-				get_hostname(&from, hostname, sizeof(hostname), ip_str);
-				printf("%s (%s)  %.3f ms  ", hostname, ip_str, rtt);
+				get_hostname(&probe->from, hostname, sizeof(hostname), ip_str);
+				printf("%s (%s)  ", hostname, ip_str);
 				ft_strcpy(last_ip, ip_str);
-				first_response = 0;
-			} else
-				printf("%.3f ms  ", rtt);
-
-			if (icmp_type == ICMP_DEST_UNREACH) {
-				reached_dest = 1;
 			}
+			printf("%.3f ms", probe->rtt);
 		}
+		previous_was_star = is_star;
 	}
 	printf("\n");
 	fflush(stdout);
+}
+
+int send_probes(t_traceroute *traceroute, const t_options *options) {
+	t_probe probes[MAX_QUERIES];
+	int reached_dest = 0;
+
+	ft_bzero(probes, sizeof(probes));
+	printf("%2d", traceroute->current_ttl);
+	fflush(stdout);
+
+	for (int i = 0; i < options->nqueries; i++)
+		probes[i].sent_ok = send_single_probe(traceroute, &probes[i]) == 0;
+
+	for (int i = 0; i < options->nqueries; i++) {
+		if (!probes[i].sent_ok)
+			continue;
+		probes[i].icmp_type = receive_single_reply(traceroute, options, &probes[i]);
+		probes[i].replied = probes[i].icmp_type >= 0;
+		if (probes[i].icmp_type == ICMP_DEST_UNREACH)
+			reached_dest = 1;
+	}
+
+	print_hop_results(probes, options->nqueries);
 	return reached_dest;
 }
