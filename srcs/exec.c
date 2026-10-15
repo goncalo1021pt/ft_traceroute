@@ -61,7 +61,7 @@ void clear_traceroute(t_traceroute *traceroute, t_options *options) {
 int exec_traceroute(t_traceroute *traceroute, t_options *options) {
 
 	if (init_traceroute(traceroute, options))
-		return -1;
+		return EXIT_INIT_FAILURE;
 	perform_traceroute(traceroute, options);
 	clear_traceroute(traceroute, options);
 	return 0;
