@@ -34,11 +34,21 @@ expect "queries 11"            1 "no more than 10 probes per hop" -q 11 127.0.0.
 expect "queries negative"      1 "no more than 10 probes per hop" -q -1 127.0.0.1
 expect "queries not a number"  1 "no more than 10 probes per hop" -q abc 127.0.0.1
 expect "queries long option"   1 "no more than 10 probes per hop" --queries=11 127.0.0.1
-expect "unknown host"          255 "Name or service not known" nonexistent.invalid
+expect "queries trailing junk" 1 "no more than 10 probes per hop" -q 5abc 127.0.0.1
+expect "queries wraps int"     1 "no more than 10 probes per hop" -q 4294967299 127.0.0.1
+expect "hops zero"             1 "invalid hops value \`0'" -m 0 127.0.0.1
+expect "hops negative"         1 "invalid hops value \`-1'" -m -1 127.0.0.1
+expect "hops not a number"     1 "invalid hops value \`abc'" -m abc 127.0.0.1
+expect "hops above 255"        1 "invalid hops value \`256'" -m 256 127.0.0.1
+expect "port zero"             1 "invalid port value \`0'" -p 0 127.0.0.1
+expect "port above 65535"      1 "invalid port value \`99999'" -p 99999 127.0.0.1
+expect "port leaves no room"   1 "is too high" -p 65535 127.0.0.1
+expect "sim-queries zero"      1 "invalid simultaneous probes value" -N 0 127.0.0.1
+expect "unknown host"          2 "Name or service not known" nonexistent.invalid
 
 # Without root the raw ICMP socket cannot be opened, which is itself worth checking.
 if [ "$(id -u)" -ne 0 ]; then
-	expect "needs root" 255 "Operation not permitted" 127.0.0.1
+	expect "needs root" 2 "Operation not permitted" 127.0.0.1
 fi
 
 printf 'cli: %d passed, %d failed\n' "$PASSED" "$FAILED"

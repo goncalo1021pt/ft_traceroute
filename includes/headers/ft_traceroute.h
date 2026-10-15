@@ -17,10 +17,13 @@
 #include <errno.h>
 #include "../libft/libft.h"
 
-#define PACKET_SIZE      64
-#define MAX_QUERIES      10
-#define ICMP_HEADER_SIZE 8
-#define DATA_SIZE        (PACKET_SIZE - ICMP_HEADER_SIZE)
+#define PACKET_SIZE       64
+#define MAX_QUERIES       10
+#define MAX_HOPS          255
+#define MAX_PORT          65535
+#define EXIT_INIT_FAILURE 2 /* same code real traceroute uses for resolve/socket errors */
+#define ICMP_HEADER_SIZE  8
+#define DATA_SIZE         (PACKET_SIZE - ICMP_HEADER_SIZE)
 
 typedef enum e_long_options {
 	OPT_HELP = 1000

@@ -42,6 +42,33 @@ void print_help(void) {
 	printf("  --help                        Show this help message\n");
 }
 
+/* Strict decimal parser: the whole string must be a number inside [min, max]. */
+static bool parse_number(const char *str, long min, long max, long *out) {
+	char *end;
+	long value;
+
+	if (str[0] != '-' && str[0] != '+' && !(str[0] >= '0' && str[0] <= '9'))
+		return false;
+	errno = 0;
+	value = strtol(str, &end, 10);
+	if (errno == ERANGE || end == str || *end != '\0' || value < min || value > max)
+		return false;
+	*out = value;
+	return true;
+}
+
+/* Parses an option argument into *out, printing "<message> `<arg>'" on failure. */
+static int parse_int_option(const char *arg, long min, long max, int *out, const char *message) {
+	long value;
+
+	if (!parse_number(arg, min, max, &value)) {
+		fprintf(stderr, "ft_traceroute: %s `%s'\n", message, arg);
+		return 1;
+	}
+	*out = (int)value;
+	return 0;
+}
+
 int parse_options(int argc, char **argv, t_traceroute *traceroute, t_options *options) {
 	int opt;
 	struct option long_options[] = {
@@ -62,27 +89,31 @@ int parse_options(int argc, char **argv, t_traceroute *traceroute, t_options *op
 				options->interface = ft_strdup(optarg);
 				break;
 			case 'm':
-				options->max_hops = atoi(optarg);
+				if (parse_int_option(optarg, 1, MAX_HOPS, &options->max_hops, "invalid hops value"))
+					return 1;
 				break;
 			case 'p':
-				options->port = atoi(optarg);
+				if (parse_int_option(optarg, 1, MAX_PORT, &options->port, "invalid port value"))
+					return 1;
 				break;
 			case 's':
 				free(options->src_addr);
 				options->src_addr = ft_strdup(optarg);
 				break;
 			case 'q': {
-				int nqueries = atoi(optarg);
+				long nqueries;
 
-				if (nqueries < 1 || nqueries > MAX_QUERIES) {
+				if (!parse_number(optarg, 1, MAX_QUERIES, &nqueries)) {
 					fprintf(stderr, "ft_traceroute: no more than %d probes per hop\n", MAX_QUERIES);
 					return 1;
 				}
-				options->nqueries = nqueries;
+				options->nqueries = (int)nqueries;
 				break;
 			}
 			case 'N':
-				options->squeries = atoi(optarg);
+				if (parse_int_option(optarg, 1, MAX_HOPS, &options->squeries,
+				                     "invalid simultaneous probes value"))
+					return 1;
 				break;
 			case 't':
 				free(options->tos);
@@ -103,6 +134,12 @@ int parse_options(int argc, char **argv, t_traceroute *traceroute, t_options *op
 
 	if (optind >= argc) {
 		fprintf(stderr, "ft_traceroute: usage error: Destination address required\n");
+		return 1;
+	}
+	/* every probe uses its own destination port, so they must all fit below 65535 */
+	if (options->port + options->max_hops * options->nqueries - 1 > MAX_PORT) {
+		fprintf(stderr, "ft_traceroute: port %d is too high for %d hops of %d probes\n",
+		        options->port, options->max_hops, options->nqueries);
 		return 1;
 	}
 	traceroute->ip_address = argv[optind];
