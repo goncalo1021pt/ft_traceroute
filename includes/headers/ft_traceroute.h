@@ -17,13 +17,15 @@
 #include <errno.h>
 #include "../libft/libft.h"
 
-#define PACKET_SIZE       64
+#define IP_HEADER_SIZE  20
+#define UDP_HEADER_SIZE 8
+/* size of the whole probe on the wire, the way real traceroute reports it */
+#define PACKET_SIZE       60
+#define PAYLOAD_SIZE      (PACKET_SIZE - IP_HEADER_SIZE - UDP_HEADER_SIZE)
 #define MAX_QUERIES       10
 #define MAX_HOPS          255
 #define MAX_PORT          65535
 #define EXIT_INIT_FAILURE 2 /* same code real traceroute uses for resolve/socket errors */
-#define ICMP_HEADER_SIZE  8
-#define DATA_SIZE         (PACKET_SIZE - ICMP_HEADER_SIZE)
 
 typedef enum e_long_options {
 	OPT_HELP = 1000
@@ -32,8 +34,17 @@ typedef enum e_long_options {
 typedef struct s_traceroute_stats {
 	int packets_sent;
 	int packets_received;
-	struct timeval last_send_time;
 } t_traceroute_stats;
+
+/* One probe of a hop: measured while waiting, printed afterwards. */
+typedef struct s_probe {
+	struct timeval sent;
+	bool sent_ok;
+	bool replied;
+	int icmp_type;
+	struct sockaddr_in from;
+	double rtt;
+} t_probe;
 
 typedef struct s_options {
 	bool help;

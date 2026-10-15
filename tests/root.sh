@@ -33,12 +33,17 @@ count_rtts() {
 out=$("$BIN" 127.0.0.1 2>&1)
 code=$?
 [ "$code" -eq 0 ] && pass || fail "localhost trace exit code" "got $code"
-printf '%s\n' "$out" | head -n 1 | grep -qF 'ft_traceroute to 127.0.0.1 (127.0.0.1), 30 hops max, 64 byte packets' &&
+printf '%s\n' "$out" | head -n 1 | grep -qF 'ft_traceroute to 127.0.0.1 (127.0.0.1), 30 hops max, 60 byte packets' &&
 	pass || fail "header line" "$(printf '%s\n' "$out" | head -n 1)"
 [ "$(printf '%s\n' "$out" | wc -l)" -eq 2 ] && pass || fail "stops at the first hop" "$out"
 [ "$(count_rtts "$out")" -eq 3 ] && pass || fail "default is 3 probes per hop" "$out"
 printf '%s\n' "$out" | sed -n 2p | grep -qE '^ 1  .*\(127\.0\.0\.1\)' &&
 	pass || fail "hop line format" "$(printf '%s\n' "$out" | sed -n 2p)"
+
+# output must match real traceroute's layout: no trailing whitespace anywhere
+printf '%s\n' "$out" | grep -q '[[:space:]]$' && fail "no trailing whitespace" "$(printf '%s\n' "$out" | cat -A)" || pass
+printf '%s\n' "$out" | sed -n 2p | grep -qE '^ 1  [^ ]+ \(127\.0\.0\.1\)  [0-9.]+ ms  [0-9.]+ ms  [0-9.]+ ms$' &&
+	pass || fail "exact hop line layout" "$(printf '%s\n' "$out" | sed -n 2p | cat -A)"
 
 # -q controls how many probes are sent per hop, including both limits
 for q in 1 2 5 10; do
@@ -56,6 +61,11 @@ printf '%s\n' "$out" | head -n 1 | grep -qF '5 hops max' && pass || fail "-m 5 s
 out=$("$BIN" localhost 2>&1)
 printf '%s\n' "$out" | head -n 1 | grep -qF 'ft_traceroute to localhost (127.0.0.1)' &&
 	pass || fail "trace by hostname" "$(printf '%s\n' "$out" | head -n 1)"
+
+# a hop that never answers prints only stars (10.9.9.0/24 is routed to lo, where nothing replies)
+ip route add 10.9.9.0/24 dev lo 2>/dev/null
+out=$("$BIN" -m 1 -q 1 10.9.9.9 2>&1)
+[ "$(printf '%s\n' "$out" | sed -n 2p)" = " 1  *" ] && pass || fail "silent hop prints only a star" "$(printf '%s\n' "$out" | cat -A)"
 
 # string options must not leak or crash (-i/-s/-t/-l are only stored, not used)
 "$BIN" -i lo -i lo -s 127.0.0.1 -t 1 -l 2 -q 1 127.0.0.1 >/dev/null 2>&1
