@@ -68,9 +68,16 @@ int parse_options(int argc, char **argv, t_traceroute *traceroute, t_options *op
 			case 's':
 				options->src_addr = ft_strdup(optarg);
 				break;
-			case 'q':
-				options->nqueries = atoi(optarg);
+			case 'q': {
+				int nqueries = atoi(optarg);
+
+				if (nqueries < 1 || nqueries > MAX_QUERIES) {
+					fprintf(stderr, "ft_traceroute: no more than %d probes per hop\n", MAX_QUERIES);
+					return 1;
+				}
+				options->nqueries = nqueries;
 				break;
+			}
 			case 'N':
 				options->squeries = atoi(optarg);
 				break;
