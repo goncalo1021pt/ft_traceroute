@@ -114,7 +114,7 @@ int receive_single_reply(t_traceroute *traceroute, t_options *options, struct so
 int send_probes(t_traceroute *traceroute, t_options *options) {
 	int i;
 	int reached_dest = 0;
-	struct timeval send_times[options->nqueries];
+	struct timeval send_times[MAX_QUERIES];
 	
 	if (traceroute->current_ttl < 10)
 		printf(" %d  ", traceroute->current_ttl);

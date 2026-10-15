@@ -18,6 +18,7 @@
 #include "../libft/libft.h"
 
 #define PACKET_SIZE 64
+#define MAX_QUERIES 10
 #define ICMP_HEADER_SIZE 8
 #define DATA_SIZE (PACKET_SIZE - ICMP_HEADER_SIZE)
 
