@@ -60,14 +60,12 @@ int set_socket_ttl(int sockfd, int ttl) {
 	return 0;
 }
 
-int set_socket_timeout(int sockfd, int seconds) {
-	struct timeval timeout;
+/* Ask the kernel to stamp every received packet, so RTTs do not depend on when we read it. */
+int set_socket_timestamps(int sockfd) {
+	int on = 1;
 
-	timeout.tv_sec = seconds;
-	timeout.tv_usec = 0;
-
-	if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-		perror("ft_traceroute: setsockopt timeout failed");
+	if (setsockopt(sockfd, SOL_SOCKET, SO_TIMESTAMP, &on, sizeof(on)) < 0) {
+		perror("ft_traceroute: setsockopt timestamp failed");
 		return -1;
 	}
 	return 0;

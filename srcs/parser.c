@@ -8,6 +8,7 @@ void initialize_program(t_options *options, t_traceroute *traceroute) {
 	options->first_ttl = 1;
 	options->nqueries = 3;
 	options->waittime = 5;
+	options->squeries = DEFAULT_SIM_QUERIES;
 	options->port = 33434;
 
 	traceroute->sockfd = -1;

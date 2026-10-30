@@ -25,7 +25,7 @@ int init_traceroute(t_traceroute *traceroute, const t_options *options) {
 	}
 
 	if (bind_udp_socket(traceroute->send_sockfd, &traceroute->src_port) < 0 ||
-	    set_socket_timeout(traceroute->sockfd, options->waittime) < 0) {
+	    set_socket_timestamps(traceroute->sockfd) < 0) {
 		close_socket(traceroute->sockfd);
 		close_socket(traceroute->send_sockfd);
 		return -1;
@@ -38,15 +38,8 @@ int init_traceroute(t_traceroute *traceroute, const t_options *options) {
 }
 
 int perform_traceroute(t_traceroute *traceroute, const t_options *options) {
-	int reached_dest = 0;
-
 	print_traceroute_header(traceroute, options);
-
-	while (traceroute->current_ttl <= options->max_hops && !reached_dest) {
-		reached_dest = send_probes(traceroute, options);
-		traceroute->current_ttl++;
-	}
-	return 0;
+	return trace_route(traceroute, options);
 }
 
 void clear_traceroute(t_traceroute *traceroute, t_options *options) {
@@ -60,10 +53,11 @@ void clear_traceroute(t_traceroute *traceroute, t_options *options) {
 }
 
 int exec_traceroute(t_traceroute *traceroute, t_options *options) {
+	int status;
 
 	if (init_traceroute(traceroute, options))
-		return EXIT_INIT_FAILURE;
-	perform_traceroute(traceroute, options);
+		return EXIT_ERROR;
+	status = perform_traceroute(traceroute, options);
 	clear_traceroute(traceroute, options);
-	return 0;
+	return status < 0 ? EXIT_ERROR : 0;
 }
