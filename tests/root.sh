@@ -103,11 +103,14 @@ if mount -t tmpfs none /run 2>/dev/null && mkdir -p /run/netns && ip netns add r
 		[ "$(count_rtts "$(printf '%s\n' "$out" | sed -n 3p)")" -eq 10 ] &&
 		pass || fail "-q 10 gets ten answers on every hop" "$out"
 
-	# the router answers "host unreachable" for 10.3.0.0/24: the trace ends there with !H
+	# The router answers "host unreachable" for 10.3.0.0/24. Depending on the kernel it does so
+	# at the first or at the second hop (route lookup before or after the TTL check), so only
+	# check that the trace ends there, on the router's line, with the marker.
 	out=$("$BIN" 10.3.0.1 2>&1)
-	printf '%s\n' "$out" | sed -n 3p | grep -qE '^ 2  .*\(10\.1\.0\.2\)  [0-9.]+ ms !H' &&
+	last=$(printf '%s\n' "$out" | tail -n 1)
+	printf '%s\n' "$last" | grep -qE '^ [12]  .*\(10\.1\.0\.2\)  [0-9.]+ ms !H' &&
 		pass || fail "unreachable hop shows !H" "$out"
-	[ "$(printf '%s\n' "$out" | wc -l)" -eq 3 ] && pass || fail "trace stops at the unreachable hop" "$out"
+	[ "$(printf '%s\n' "$out" | wc -l)" -le 3 ] && pass || fail "trace stops at the unreachable hop" "$out"
 else
 	fail "could not build the three-machine test network"
 fi
