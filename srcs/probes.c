@@ -22,7 +22,8 @@ int send_single_probe(t_traceroute *traceroute, t_probe *probe) {
 	}
 
 	ft_memcpy(&dest, &traceroute->dest_addr, sizeof(dest));
-	dest.sin_port = htons((uint16_t)(traceroute->dest_port + traceroute->sequence));
+	probe->port = (uint16_t)(traceroute->dest_port + traceroute->sequence);
+	dest.sin_port = htons(probe->port);
 
 	ft_bzero(packet, sizeof(packet));
 	*(uint16_t *)packet = htons(traceroute->sequence);
@@ -45,34 +46,28 @@ int send_single_probe(t_traceroute *traceroute, t_probe *probe) {
  * Returns the ICMP type, or -1 on timeout. The RTT is taken the moment the packet
  * arrives, before anything slow (like a reverse DNS lookup) can happen. */
 int receive_single_reply(t_traceroute *traceroute, const t_options *options, t_probe *probe) {
-	struct sockaddr_in *from = &probe->from;
 	unsigned char buffer[1024];
-	socklen_t from_len = sizeof(*from);
 	struct timeval recv_time, timeout, start_time;
 	fd_set readfds;
-	struct icmphdr *icmp;
 
 	gettimeofday(&start_time, NULL);
 
 	while (1) {
-		FD_ZERO(&readfds);
-		FD_SET(traceroute->sockfd, &readfds);
-
 		struct timeval now, elapsed;
+
 		gettimeofday(&now, NULL);
 		timersub(&now, &start_time, &elapsed);
-
 		timeout.tv_sec = options->waittime - elapsed.tv_sec;
 		timeout.tv_usec = -elapsed.tv_usec;
-
 		if (timeout.tv_usec < 0) {
 			timeout.tv_sec--;
 			timeout.tv_usec += 1000000;
 		}
-
 		if (timeout.tv_sec < 0)
 			return -1;
 
+		FD_ZERO(&readfds);
+		FD_SET(traceroute->sockfd, &readfds);
 		int ret = select(traceroute->sockfd + 1, &readfds, NULL, NULL, &timeout);
 		if (ret <= 0) {
 			if (ret < 0)
@@ -80,38 +75,31 @@ int receive_single_reply(t_traceroute *traceroute, const t_options *options, t_p
 			return -1;
 		}
 
+		struct sockaddr_in from;
+		socklen_t from_len = sizeof(from);
+		t_reply reply;
+
 		gettimeofday(&recv_time, NULL);
 		ssize_t bytes_received = recvfrom(traceroute->sockfd, buffer, sizeof(buffer), 0,
-		                                  (struct sockaddr *)from, &from_len);
+		                                  (struct sockaddr *)&from, &from_len);
 		if (bytes_received < 0) {
-			if (errno == EAGAIN || errno == EWOULDBLOCK)
+			if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
 				continue;
 			perror("recvfrom");
 			return -1;
 		}
 
-		const struct ip *ip_hdr = (struct ip *)buffer;
-		int ip_hdr_len = ip_hdr->ip_hl << 2;
+		/* anything that is not the answer to exactly this probe is somebody else's */
+		if (!parse_icmp_reply(buffer, (size_t)bytes_received, traceroute, &reply) ||
+		    reply.dport != probe->port)
+			continue;
 
-		icmp = (struct icmphdr *)(buffer + ip_hdr_len);
-
-		if (icmp->type == ICMP_TIME_EXCEEDED || icmp->type == ICMP_DEST_UNREACH) {
-			struct ip *orig_ip = (struct ip *)((char *)icmp + sizeof(struct icmphdr));
-
-			if (orig_ip->ip_p == IPPROTO_UDP) {
-				struct udphdr *orig_udp =
-				    (struct udphdr *)((char *)orig_ip + (orig_ip->ip_hl << 2));
-				uint16_t orig_port = ntohs(orig_udp->uh_dport);
-
-				if (orig_port >= traceroute->dest_port && orig_port < traceroute->dest_port + 100) {
-					probe->rtt = (double)(recv_time.tv_sec - probe->sent.tv_sec) * 1000.0 +
-					             (double)(recv_time.tv_usec - probe->sent.tv_usec) / 1000.0;
-
-					traceroute->stats.packets_received++;
-					return icmp->type;
-				}
-			}
-		}
+		probe->from = from;
+		probe->icmp_code = reply.code;
+		probe->rtt = (double)(recv_time.tv_sec - probe->sent.tv_sec) * 1000.0 +
+		             (double)(recv_time.tv_usec - probe->sent.tv_usec) / 1000.0;
+		traceroute->stats.packets_received++;
+		return reply.type;
 	}
 }
 
@@ -133,7 +121,9 @@ static void print_hop_results(const t_probe *probes, int nprobes) {
 			printf("*");
 		} else {
 			char ip_str[INET_ADDRSTRLEN];
+			char marker[16];
 
+			format_marker(probe->icmp_type, probe->icmp_code, marker, sizeof(marker));
 			inet_ntop(AF_INET, &probe->from.sin_addr, ip_str, sizeof(ip_str));
 			if (strcmp(ip_str, last_ip) != 0) {
 				char hostname[NI_MAXHOST];
@@ -142,7 +132,7 @@ static void print_hop_results(const t_probe *probes, int nprobes) {
 				printf("%s (%s)  ", hostname, ip_str);
 				ft_strcpy(last_ip, ip_str);
 			}
-			printf("%.3f ms", probe->rtt);
+			printf("%.3f ms%s", probe->rtt, marker);
 		}
 		previous_was_star = is_star;
 	}

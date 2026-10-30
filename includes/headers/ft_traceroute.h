@@ -41,10 +41,19 @@ typedef struct s_probe {
 	struct timeval sent;
 	bool sent_ok;
 	bool replied;
+	uint16_t port;
 	int icmp_type;
+	int icmp_code;
 	struct sockaddr_in from;
 	double rtt;
 } t_probe;
+
+/* What we keep from an ICMP error that answers one of our probes. */
+typedef struct s_reply {
+	int type;
+	int code;
+	uint16_t dport;
+} t_reply;
 
 typedef struct s_options {
 	bool help;
@@ -70,6 +79,7 @@ typedef struct s_traceroute {
 	uint16_t sequence;
 	int current_ttl;
 	int dest_port;
+	uint16_t src_port;
 	t_traceroute_stats stats;
 } t_traceroute;
 
@@ -87,9 +97,15 @@ void close_socket(int sockfd);
 int resolve_address(t_traceroute *traceroute);
 int set_socket_ttl(int sockfd, int ttl);
 int set_socket_timeout(int sockfd, int seconds);
+int bind_udp_socket(int sockfd, uint16_t *port);
 
 // exec.c
 int exec_traceroute(t_traceroute *traceroute, t_options *options);
+
+// icmp.c
+bool parse_icmp_reply(const unsigned char *buf, size_t len, const t_traceroute *traceroute,
+                      t_reply *reply);
+void format_marker(int type, int code, char *buf, size_t size);
 
 // probes.c
 int send_probes(t_traceroute *traceroute, const t_options *options);

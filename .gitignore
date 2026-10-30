@@ -59,7 +59,9 @@ dkms.conf
 /ft_traceroute_asan
 /objs/
 /objs_asan/
-/tests/unit/run_unit
+/tests/unit/test_*
+!/tests/unit/test_*.c
+/tests/unit/*.asan
 vg.log
 includes/libft/libft.a
 

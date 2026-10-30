@@ -24,7 +24,8 @@ int init_traceroute(t_traceroute *traceroute, const t_options *options) {
 		return -1;
 	}
 
-	if (set_socket_timeout(traceroute->sockfd, options->waittime) < 0) {
+	if (bind_udp_socket(traceroute->send_sockfd, &traceroute->src_port) < 0 ||
+	    set_socket_timeout(traceroute->sockfd, options->waittime) < 0) {
 		close_socket(traceroute->sockfd);
 		close_socket(traceroute->send_sockfd);
 		return -1;

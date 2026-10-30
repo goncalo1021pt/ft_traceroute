@@ -7,9 +7,16 @@
 
 BIN=${1:-./ft_traceroute}
 
-if [ "$(id -u)" -ne 0 ]; then
-	exec unshare -rn sh -c 'ip link set lo up && exec sh "$0" "$@"' "$0" "$BIN"
+# Everything runs in private user/mount/network namespaces, so the tests can create
+# interfaces and routes without touching the machine: unshare -n when already root (CI),
+# unshare -rn otherwise (you are root only inside the namespace).
+if [ -z "$FT_IN_NS" ]; then
+	if [ "$(id -u)" -eq 0 ]; then
+		exec unshare -nm env FT_IN_NS=1 sh "$0" "$BIN"
+	fi
+	exec unshare -rnm env FT_IN_NS=1 sh "$0" "$BIN"
 fi
+ip link set lo up
 
 PASSED=0
 FAILED=0
@@ -66,6 +73,47 @@ printf '%s\n' "$out" | head -n 1 | grep -qF 'ft_traceroute to localhost (127.0.0
 ip route add 10.9.9.0/24 dev lo 2>/dev/null
 out=$("$BIN" -m 1 -q 1 10.9.9.9 2>&1)
 [ "$(printf '%s\n' "$out" | sed -n 2p)" = " 1  *" ] && pass || fail "silent hop prints only a star" "$(printf '%s\n' "$out" | cat -A)"
+
+# Three machines in a row:  us -- router (10.1.0.2 / 10.2.0.1) -- destination (10.2.0.2)
+# This is the only way to see TTL-exceeded replies, markers and several hops locally.
+# The kernel rate-limits ICMP errors; switch that off so -q 10 gets ten answers.
+if mount -t tmpfs none /run 2>/dev/null && mkdir -p /run/netns && ip netns add r && ip netns add d; then
+	ip link add v1 type veth peer name v1r && ip link set v1r netns r
+	ip link add v2 type veth peer name v2d && ip link set v2 netns r && ip link set v2d netns d
+	ip addr add 10.1.0.1/24 dev v1 && ip link set v1 up
+	ip route add 10.2.0.0/24 via 10.1.0.2
+	ip route add 10.3.0.0/24 via 10.1.0.2
+	sysctl -qw net.ipv4.icmp_ratelimit=0
+	ip netns exec r sh -c 'ip link set lo up; ip addr add 10.1.0.2/24 dev v1r; ip link set v1r up
+		ip addr add 10.2.0.1/24 dev v2; ip link set v2 up
+		sysctl -qw net.ipv4.ip_forward=1 net.ipv4.icmp_ratelimit=0
+		ip route add unreachable 10.3.0.0/24'
+	ip netns exec d sh -c 'ip link set lo up; ip addr add 10.2.0.2/24 dev v2d; ip link set v2d up
+		ip route add 10.1.0.0/24 via 10.2.0.1; sysctl -qw net.ipv4.icmp_ratelimit=0'
+
+	out=$("$BIN" 10.2.0.2 2>&1)
+	[ "$(printf '%s\n' "$out" | wc -l)" -eq 3 ] && pass || fail "two-hop trace has header + 2 hops" "$out"
+	printf '%s\n' "$out" | sed -n 2p | grep -qE '^ 1  [^ ]+ \(10\.1\.0\.2\)  [0-9.]+ ms  [0-9.]+ ms  [0-9.]+ ms$' &&
+		pass || fail "hop 1 is the router" "$(printf '%s\n' "$out" | sed -n 2p)"
+	printf '%s\n' "$out" | sed -n 3p | grep -qE '^ 2  [^ ]+ \(10\.2\.0\.2\)  [0-9.]+ ms  [0-9.]+ ms  [0-9.]+ ms$' &&
+		pass || fail "hop 2 is the destination" "$(printf '%s\n' "$out" | sed -n 3p)"
+
+	out=$("$BIN" -q 10 10.2.0.2 2>&1)
+	[ "$(count_rtts "$(printf '%s\n' "$out" | sed -n 2p)")" -eq 10 ] &&
+		[ "$(count_rtts "$(printf '%s\n' "$out" | sed -n 3p)")" -eq 10 ] &&
+		pass || fail "-q 10 gets ten answers on every hop" "$out"
+
+	# The router answers "host unreachable" for 10.3.0.0/24. Depending on the kernel it does so
+	# at the first or at the second hop (route lookup before or after the TTL check), so only
+	# check that the trace ends there, on the router's line, with the marker.
+	out=$("$BIN" 10.3.0.1 2>&1)
+	last=$(printf '%s\n' "$out" | tail -n 1)
+	printf '%s\n' "$last" | grep -qE '^ [12]  .*\(10\.1\.0\.2\)  [0-9.]+ ms !H' &&
+		pass || fail "unreachable hop shows !H" "$out"
+	[ "$(printf '%s\n' "$out" | wc -l)" -le 3 ] && pass || fail "trace stops at the unreachable hop" "$out"
+else
+	fail "could not build the three-machine test network"
+fi
 
 # string options must not leak or crash (-i/-s/-t/-l are only stored, not used)
 "$BIN" -i lo -i lo -s 127.0.0.1 -t 1 -l 2 -q 1 127.0.0.1 >/dev/null 2>&1
