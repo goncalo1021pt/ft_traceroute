@@ -27,6 +27,25 @@ int create_udp_socket(void) {
 	return sockfd;
 }
 
+/* Binds the probe socket to a port picked by the kernel and returns it (host order).
+ * Every probe leaves from that port, which is how we recognise the replies to our own
+ * probes and ignore anything else that reaches the raw socket. */
+int bind_udp_socket(int sockfd, uint16_t *port) {
+	struct sockaddr_in addr;
+	socklen_t len = sizeof(addr);
+
+	ft_bzero(&addr, sizeof(addr));
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0 ||
+	    getsockname(sockfd, (struct sockaddr *)&addr, &len) < 0) {
+		perror("ft_traceroute: bind failed");
+		return -1;
+	}
+	*port = ntohs(addr.sin_port);
+	return 0;
+}
+
 void close_socket(int sockfd) {
 	if (sockfd >= 0) {
 		close(sockfd);

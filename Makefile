@@ -1,6 +1,5 @@
 NAME = ft_traceroute
 NAME_ASAN = $(NAME)_asan
-NAME_UNIT = tests/unit/run_unit
 
 SRCS_DIR = srcs/
 OBJS_DIR = objs/
@@ -11,9 +10,11 @@ OBJS_ASAN = $(patsubst $(SRCS_DIR)%.c,$(OBJS_DIR_ASAN)%.o,$(SRCS))
 HEADERS = -I includes/headers/
 HDRS = $(wildcard includes/headers/*.h)
 
-# unit tests: every source except main.c, plus the test files
+# unit tests: each tests/unit/test_*.c is its own program, linked with every source except main.c
 UNIT_SRCS = $(wildcard tests/unit/*.c)
-UNIT_OBJS = $(filter-out $(OBJS_DIR)main.o,$(OBJS)) $(UNIT_SRCS:.c=.o)
+UNIT_TESTS = $(patsubst %.c,%,$(wildcard tests/unit/test_*.c))
+UNIT_OBJS = $(UNIT_SRCS:.c=.o)
+APP_OBJS = $(filter-out $(OBJS_DIR)main.o,$(OBJS))
 
 RM = rm -f
 CFLAGS = -Wall -Wextra -Werror -g
@@ -72,11 +73,20 @@ warnings:
 tests/unit/%.o: tests/unit/%.c $(HDRS) $(wildcard tests/unit/*.h)
 	@$(CC) $(CFLAGS) $(HEADERS) -I tests/unit -c $< -o $@
 
-$(NAME_UNIT): $(UNIT_OBJS) $(LIBFT)
-	@$(CC) $(CFLAGS) -o $@ $(UNIT_OBJS) $(LIBFT)
+tests/unit/test_%: tests/unit/test_%.o $(APP_OBJS) $(LIBFT)
+	@$(CC) $(CFLAGS) -o $@ $< $(APP_OBJS) $(LIBFT)
 
-unit: $(NAME_UNIT)
-	@./$(NAME_UNIT)
+unit: $(UNIT_TESTS)
+	@for t in $(UNIT_TESTS); do ./$$t || exit 1; done
+
+.SECONDARY: $(UNIT_OBJS)
+
+# the same unit tests built with AddressSanitizer + UBSan (catches out-of-bounds reads)
+unit-asan: $(LIBFT)
+	@for t in $(UNIT_TESTS); do \
+		$(CC) $(CFLAGS) $(SFLAGS) $(HEADERS) -I tests/unit -o $$t.asan $$t.c \
+			$(filter-out $(SRCS_DIR)main.c,$(SRCS)) $(LIBFT) && ./$$t.asan || exit 1; \
+	done; $(RM) tests/unit/*.asan
 
 # command-line tests, none of them need root
 cli: $(NAME)
@@ -104,7 +114,7 @@ lint:
 clean:
 	@$(RM) -r $(OBJS_DIR)
 	@$(RM) -r $(OBJS_DIR_ASAN)
-	@$(RM) $(UNIT_OBJS) $(NAME_UNIT)
+	@$(RM) $(UNIT_OBJS) $(UNIT_TESTS)
 	@$(MAKE) -C $(LIBFT_DIR) clean --no-print-directory
 	@echo "$(RED)$(NAME)$(NC) OBJS cleaned!"
 
@@ -124,5 +134,5 @@ run: all
 
 re: fclean all
 
-.PHONY: all asan warnings unit cli root-tests root-tests-asan test format format-check lint \
+.PHONY: all asan warnings unit unit-asan cli root-tests root-tests-asan test format format-check lint \
 	clean fclean v fcount run re
