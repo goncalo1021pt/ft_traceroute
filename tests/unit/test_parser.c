@@ -23,6 +23,7 @@ static void test_defaults(void) {
 	CHECK_INT(opts.nqueries, 3);
 	CHECK_INT(opts.waittime, 5);
 	CHECK_INT(opts.port, 33434);
+	CHECK_INT(opts.squeries, 16);
 	CHECK_INT(opts.help, 0);
 	CHECK(opts.interface == NULL);
 	CHECK(opts.src_addr == NULL);
