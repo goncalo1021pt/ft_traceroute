@@ -88,10 +88,10 @@ warnings:
 	@echo "$(GREEN)warnings$(NC) clean!"
 
 # unit tests
-tests/unit/%.o: tests/unit/%.c $(HDRS) $(wildcard tests/unit/*.h)
+tests/unit/%.o: tests/unit/%.c $(HDRS) $(wildcard tests/unit/*.h) $(MODE_FILE)
 	@$(CC) $(CFLAGS) $(HEADERS) -I tests/unit -c $< -o $@
 
-tests/unit/test_%: tests/unit/test_%.o $(APP_OBJS) $(LIBFT)
+tests/unit/test_%: tests/unit/test_%.o $(APP_OBJS) $(LIBFT) $(MODE_FILE)
 	@$(CC) $(CFLAGS) -o $@ $< $(APP_OBJS) $(LIBFT)
 
 unit: $(UNIT_TESTS)
