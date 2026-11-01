@@ -9,6 +9,11 @@ void initialize_program(t_options *options, t_traceroute *traceroute) {
 	options->nqueries = 3;
 	options->waittime = 5;
 	options->squeries = DEFAULT_SIM_QUERIES;
+#ifdef FT_BONUS
+	options->names = NAMES_LOOKUP;
+#else
+	options->names = NAMES_NONE;
+#endif
 	options->port = 33434;
 
 	traceroute->sockfd = -1;
@@ -40,6 +45,9 @@ void print_help(void) {
 	printf("  -N, --sim-queries <queries>   Number of simultaneous queries\n");
 	printf("  -t, --tos <tos>               Type of service\n");
 	printf("  -l, --flowlabel <label>       Flow label\n");
+#ifdef FT_BONUS
+	printf("  -n                            Do not resolve IP addresses to host names\n");
+#endif
 	printf("  --help                        Show this help message\n");
 }
 
@@ -70,6 +78,12 @@ static int parse_int_option(const char *arg, long min, long max, int *out, const
 	return 0;
 }
 
+#ifdef FT_BONUS
+#define SHORT_OPTIONS "i:m:p:s:q:N:t:l:n"
+#else
+#define SHORT_OPTIONS "i:m:p:s:q:N:t:l:"
+#endif
+
 int parse_options(int argc, char **argv, t_traceroute *traceroute, t_options *options) {
 	int opt;
 	struct option long_options[] = {
@@ -83,7 +97,7 @@ int parse_options(int argc, char **argv, t_traceroute *traceroute, t_options *op
 		fprintf(stderr, "ft_traceroute: usage error: Destination address required\n");
 		return 1;
 	}
-	while ((opt = getopt_long(argc, argv, "i:m:p:s:q:N:t:l:", long_options, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, SHORT_OPTIONS, long_options, NULL)) != -1) {
 		switch (opt) {
 			case 'i':
 				free(options->interface);
@@ -124,6 +138,11 @@ int parse_options(int argc, char **argv, t_traceroute *traceroute, t_options *op
 				free(options->flowlabel);
 				options->flowlabel = ft_strdup(optarg);
 				break;
+#ifdef FT_BONUS
+			case 'n':
+				options->names = NAMES_HIDDEN;
+				break;
+#endif
 			case OPT_HELP:
 				options->help = true;
 				return OPT_HELP;

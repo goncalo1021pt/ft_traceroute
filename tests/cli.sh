@@ -29,6 +29,12 @@ expect "help lists -q"         0 "--queries" --help
 expect "help ignores the rest" 0 "Usage: ft_traceroute" --help 127.0.0.1
 expect "missing destination"   1 "Destination address required" -q 2
 expect "unknown option"        1 "usage error" -Z 127.0.0.1
+# -n exists only in the bonus build (it is what turns reverse DNS off)
+if "$BIN" --help | grep -q -- '^  -n '; then
+	expect "-n is accepted"        2 "Operation not permitted" -n 127.0.0.1
+else
+	expect "-n is not in the mandatory build" 1 "usage error" -n 127.0.0.1
+fi
 expect "queries 0"             1 "no more than 10 probes per hop" -q 0 127.0.0.1
 expect "queries 11"            1 "no more than 10 probes per hop" -q 11 127.0.0.1
 expect "queries negative"      1 "no more than 10 probes per hop" -q -1 127.0.0.1

@@ -24,6 +24,11 @@ static void test_defaults(void) {
 	CHECK_INT(opts.waittime, 5);
 	CHECK_INT(opts.port, 33434);
 	CHECK_INT(opts.squeries, 16);
+#ifdef FT_BONUS
+	CHECK_INT(opts.names, NAMES_LOOKUP);
+#else
+	CHECK_INT(opts.names, NAMES_NONE);
+#endif
 	CHECK_INT(opts.help, 0);
 	CHECK(opts.interface == NULL);
 	CHECK(opts.src_addr == NULL);
@@ -211,6 +216,20 @@ static void test_numbers_that_wrap(void) {
 	CHECK_INT(parse(&tr, &opts, 4, trailing_q), 1);
 }
 
+static void test_numeric_flag(void) {
+	t_traceroute tr;
+	t_options opts;
+	char *argv[] = {"ft_traceroute", "-n", "127.0.0.1", NULL};
+
+#ifdef FT_BONUS
+	CHECK_INT(parse(&tr, &opts, 3, argv), 0);
+	CHECK_INT(opts.names, NAMES_HIDDEN);
+#else
+	/* the mandatory build has no name resolution at all, so no -n either */
+	CHECK_INT(parse(&tr, &opts, 3, argv), 1);
+#endif
+}
+
 int main(void) {
 	RUN(test_defaults);
 	RUN(test_no_arguments);
@@ -218,6 +237,7 @@ int main(void) {
 	RUN(test_help);
 	RUN(test_unknown_option);
 	RUN(test_numeric_options);
+	RUN(test_numeric_flag);
 	RUN(test_long_options);
 	RUN(test_string_options);
 	RUN(test_repeated_string_option);

@@ -59,6 +59,9 @@ dkms.conf
 /ft_traceroute_asan
 /objs/
 /objs_asan/
+/objs_bonus/
+/objs_bonus_asan/
+.build_mode
 /tests/unit/test_*
 !/tests/unit/test_*.c
 /tests/unit/*.asan

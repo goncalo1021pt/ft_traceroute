@@ -1,5 +1,6 @@
 #include "ft_traceroute.h"
 
+#ifdef FT_BONUS
 void get_hostname(const struct sockaddr_in *addr, char *hostname, size_t len, char *ip_str) {
 	int ret;
 
@@ -10,10 +11,11 @@ void get_hostname(const struct sockaddr_in *addr, char *hostname, size_t len, ch
 		ft_strcpy(hostname, ip_str);
 	}
 }
+#endif
 
 /* Prints the line of one finished hop. All the measuring is done by now, so the
  * (possibly slow) hostname lookups cannot change any RTT. */
-void print_hop(int ttl, const t_probe *probes, int nprobes) {
+void print_hop(int ttl, const t_probe *probes, int nprobes, t_names_mode names) {
 	char last_ip[INET_ADDRSTRLEN] = {0};
 	bool previous_was_star = false;
 
@@ -35,10 +37,18 @@ void print_hop(int ttl, const t_probe *probes, int nprobes) {
 			format_marker(probe->icmp_type, probe->icmp_code, marker, sizeof(marker));
 			inet_ntop(AF_INET, &probe->from.sin_addr, ip_str, sizeof(ip_str));
 			if (strcmp(ip_str, last_ip) != 0) {
-				char hostname[NI_MAXHOST];
+				if (names == NAMES_HIDDEN) {
+					printf("%s  ", ip_str);
+#ifdef FT_BONUS
+				} else if (names == NAMES_LOOKUP) {
+					char hostname[NI_MAXHOST];
 
-				get_hostname(&probe->from, hostname, sizeof(hostname), ip_str);
-				printf("%s (%s)  ", hostname, ip_str);
+					get_hostname(&probe->from, hostname, sizeof(hostname), ip_str);
+					printf("%s (%s)  ", hostname, ip_str);
+#endif
+				} else {
+					printf("%s (%s)  ", ip_str, ip_str);
+				}
 				ft_strcpy(last_ip, ip_str);
 			}
 			printf("%.3f ms%s", probe->rtt, marker);

@@ -23,6 +23,15 @@ WFLAGS = -Wshadow -Wconversion -Wpedantic -Wstrict-prototypes
 VFLAGS = --leak-check=full --show-leak-kinds=all --track-origins=yes --track-fds=yes
 CC = cc
 
+# `make bonus` builds the same program with reverse DNS and -n (objects kept apart)
+MODE ?= mandatory
+MODE_FILE = .build_mode
+ifeq ($(MODE),bonus)
+CFLAGS += -DFT_BONUS
+OBJS_DIR = objs_bonus/
+OBJS_DIR_ASAN = objs_bonus_asan/
+endif
+
 # libft
 LIBFT_DIR = ./includes/libft
 LIBFT = $(LIBFT_DIR)/libft.a
@@ -39,6 +48,15 @@ NC = \033[0m
 
 all: $(NAME)
 
+bonus:
+	@$(MAKE) MODE=bonus --no-print-directory all
+
+# rebuild the binary when switching between make and make bonus
+$(MODE_FILE): FORCE
+	@echo $(MODE) | cmp -s - $@ || echo $(MODE) > $@
+
+FORCE:
+
 $(OBJS_DIR)%.o: $(SRCS_DIR)%.c $(HDRS)
 	@mkdir -p $(dir $@)
 	@$(CC) $(CFLAGS) $(HEADERS) -c $< -o $@
@@ -47,7 +65,7 @@ $(OBJS_DIR_ASAN)%.o: $(SRCS_DIR)%.c $(HDRS)
 	@mkdir -p $(dir $@)
 	@$(CC) $(CFLAGS) $(SFLAGS) $(HEADERS) -c $< -o $@
 
-$(NAME): $(OBJS) $(LIBFT)
+$(NAME): $(OBJS) $(LIBFT) $(MODE_FILE)
 	@echo "$(GREEN)$(NAME)$(NC) compiling..."
 	@$(CC) $(CFLAGS) -o $(NAME) $(OBJS) $(LIBFT) $(HEADERS)
 	@echo "$(GREEN)$(NAME)$(NC) ready!"
@@ -70,10 +88,10 @@ warnings:
 	@echo "$(GREEN)warnings$(NC) clean!"
 
 # unit tests
-tests/unit/%.o: tests/unit/%.c $(HDRS) $(wildcard tests/unit/*.h)
+tests/unit/%.o: tests/unit/%.c $(HDRS) $(wildcard tests/unit/*.h) $(MODE_FILE)
 	@$(CC) $(CFLAGS) $(HEADERS) -I tests/unit -c $< -o $@
 
-tests/unit/test_%: tests/unit/test_%.o $(APP_OBJS) $(LIBFT)
+tests/unit/test_%: tests/unit/test_%.o $(APP_OBJS) $(LIBFT) $(MODE_FILE)
 	@$(CC) $(CFLAGS) -o $@ $< $(APP_OBJS) $(LIBFT)
 
 unit: $(UNIT_TESTS)
@@ -112,14 +130,13 @@ lint:
 		--suppress=missingIncludeSystem $(HEADERS) $(SRCS_DIR)
 
 clean:
-	@$(RM) -r $(OBJS_DIR)
-	@$(RM) -r $(OBJS_DIR_ASAN)
+	@$(RM) -r objs objs_asan objs_bonus objs_bonus_asan
 	@$(RM) $(UNIT_OBJS) $(UNIT_TESTS)
 	@$(MAKE) -C $(LIBFT_DIR) clean --no-print-directory
 	@echo "$(RED)$(NAME)$(NC) OBJS cleaned!"
 
 fclean: clean
-	@$(RM) $(NAME) $(NAME_ASAN)
+	@$(RM) $(NAME) $(NAME_ASAN) $(MODE_FILE)
 	@$(MAKE) -C $(LIBFT_DIR) fclean --no-print-directory
 	@echo "$(RED)$(NAME)$(NC) cleaned!"
 
@@ -134,5 +151,5 @@ run: all
 
 re: fclean all
 
-.PHONY: all asan warnings unit unit-asan cli root-tests root-tests-asan test format format-check lint \
+.PHONY: all bonus FORCE asan warnings unit unit-asan cli root-tests root-tests-asan test format format-check lint \
 	clean fclean v fcount run re

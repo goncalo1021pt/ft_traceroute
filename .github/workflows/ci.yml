@@ -57,3 +57,22 @@ jobs:
 
       - name: Trace tests (sanitized, root)
         run: sudo make root-tests-asan
+
+      # `make bonus` builds the same program with reverse DNS and -n; run everything again on it
+      - name: Build (bonus)
+        run: make bonus
+
+      - name: Strict warnings (bonus)
+        run: make MODE=bonus warnings
+
+      - name: Unit tests (bonus, also sanitized)
+        run: make MODE=bonus unit unit-asan
+
+      - name: Command-line tests (bonus)
+        run: make MODE=bonus cli
+
+      - name: Trace tests (bonus, root)
+        run: sudo make MODE=bonus root-tests
+
+      - name: Trace tests (bonus, sanitized, root)
+        run: sudo make MODE=bonus root-tests-asan

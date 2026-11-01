@@ -87,7 +87,7 @@ static void print_ready(t_run *run) {
 		for (int i = first; i < first + run->nqueries; i++)
 			if (run->probes[i].state != PROBE_DONE)
 				return;
-		print_hop(run->probes[first].ttl, &run->probes[first], run->nqueries);
+		print_hop(run->probes[first].ttl, &run->probes[first], run->nqueries, run->options->names);
 		run->printed++;
 	}
 }
