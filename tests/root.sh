@@ -31,6 +31,9 @@ fail() {
 	[ -n "$2" ] && printf '  %s\n' "$2"
 }
 
+# the extra options (-f -w -t -s -i) exist only in the bonus build
+"$BIN" --help | grep -q -- '^  -f,' && BONUS=1 || BONUS=0
+
 # number of RTT values ("1.234 ms") printed in the given text
 count_rtts() {
 	printf '%s\n' "$1" | grep -o ' ms' | wc -l
@@ -158,14 +161,43 @@ code=$?
 [ "$code" -eq 2 ] && [ "$(printf '%s\n' "$out" | grep -c 'Network is unreachable')" -eq 1 ] &&
 	pass || fail "no route fails once with exit 2" "exit $code: $out"
 
-# string options must not leak or crash (-i/-s/-t/-l are only stored, not used)
-"$BIN" -i lo -i lo -s 127.0.0.1 -t 1 -l 2 -q 1 127.0.0.1 >/dev/null 2>&1
-[ $? -eq 0 ] && pass || fail "string options are accepted"
+if [ "$BONUS" -eq 1 ]; then
+	# repeated string options must not leak or crash
+	"$BIN" -i lo -i lo -s 127.0.0.1 -s 127.0.0.1 -t 1 -q 1 127.0.0.1 >/dev/null 2>&1
+	[ $? -eq 0 ] && pass || fail "repeated string options are accepted"
+
+	# -f starts at a later hop: the first line printed is that hop
+	out=$("$BIN" -f 2 -m 3 -q 1 10.2.0.2 2>&1)
+	[ "$(printf '%s\n' "$out" | wc -l)" -eq 2 ] &&
+		printf '%s\n' "$out" | sed -n 2p | grep -qE '^ 2  [^ ]+ \(10\.2\.0\.2\)  [0-9.]+ ms$' &&
+		pass || fail "-f 2 starts at hop 2" "$out"
+	# -w: a silent hop gives up after that many seconds
+	start=$(date +%s)
+	"$BIN" -w 1 -m 2 -q 1 10.9.9.9 >/dev/null 2>&1
+	took=$(($(date +%s) - start))
+	[ "$took" -le 3 ] && pass || fail "-w 1 waits one second (took ${took}s)"
+	# -t, -s and -i still reach the destination
+	"$BIN" -t 16 -q 1 10.2.0.2 >/dev/null 2>&1
+	[ $? -eq 0 ] && pass || fail "-t 16 works"
+	out=$("$BIN" -s 10.1.0.1 -q 1 10.2.0.2 2>&1)
+	printf '%s\n' "$out" | tail -1 | grep -q '10\.2\.0\.2' && pass || fail "-s with our own address works" "$out"
+	out=$("$BIN" -s 10.9.9.9 10.2.0.2 2>&1)
+	[ $? -eq 2 ] && pass || fail "-s with an address that is not ours exits 2" "$out"
+	out=$("$BIN" -s nonsense 10.2.0.2 2>&1)
+	[ $? -eq 2 ] && printf '%s' "$out" | grep -q 'invalid source address' && pass ||
+		fail "-s nonsense is rejected" "$out"
+	out=$("$BIN" -i v1 -q 1 10.2.0.2 2>&1)
+	printf '%s\n' "$out" | tail -1 | grep -q '10\.2\.0\.2' && pass || fail "-i v1 works" "$out"
+	out=$("$BIN" -i nosuchif 10.2.0.2 2>&1)
+	[ $? -eq 2 ] && printf '%s' "$out" | grep -q 'cannot use interface' && pass ||
+		fail "-i with an unknown interface exits 2" "$out"
+fi
 
 # valgrind: no leaks, no invalid accesses, no leaked descriptors (skipped when absent or sanitized)
 if command -v valgrind >/dev/null 2>&1 && ! nm "$BIN" 2>/dev/null | grep -q __asan_init; then
+	[ "$BONUS" -eq 1 ] && vg_args="-i lo -s 127.0.0.1 -t 8 -f 1 -w 2" || vg_args=""
 	valgrind --error-exitcode=99 --leak-check=full --show-leak-kinds=all --errors-for-leak-kinds=all \
-		"$BIN" -i lo -s 127.0.0.1 -q 2 127.0.0.1 >/dev/null 2>vg.log
+		"$BIN" $vg_args -q 2 127.0.0.1 >/dev/null 2>vg.log
 	if [ $? -eq 99 ]; then
 		fail "valgrind is clean" "see $(pwd)/vg.log"
 	else

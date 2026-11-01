@@ -30,6 +30,7 @@ static void test_defaults(void) {
 	CHECK_INT(opts.names, NAMES_NONE);
 #endif
 	CHECK_INT(opts.help, 0);
+	CHECK_INT(opts.tos, 0);
 	CHECK(opts.interface == NULL);
 	CHECK(opts.src_addr == NULL);
 }
@@ -92,6 +93,7 @@ static void test_long_options(void) {
 	CHECK_STR(tr.ip_address, "10.0.0.1");
 }
 
+#ifdef FT_BONUS
 static void test_string_options(void) {
 	t_traceroute tr;
 	t_options opts;
@@ -112,6 +114,56 @@ static void test_repeated_string_option(void) {
 	CHECK_STR(opts.interface, "eth1");
 	free_options(&opts);
 }
+
+static void test_bonus_numbers(void) {
+	t_traceroute tr;
+	t_options opts;
+	char *good[] = {"ft_traceroute", "-f", "4", "-w", "2", "-t", "16", "127.0.0.1", NULL};
+	char *long_good[] = {"ft_traceroute", "--first-ttl=3", "--wait=7",
+	                     "--tos=255",     "127.0.0.1",     NULL};
+	char *zero_tos[] = {"ft_traceroute", "-t", "0", "127.0.0.1", NULL};
+	char *ttl_zero[] = {"ft_traceroute", "-f", "0", "127.0.0.1", NULL};
+	char *ttl_high[] = {"ft_traceroute", "-f", "40", "127.0.0.1", NULL};
+	char *ttl_equal[] = {"ft_traceroute", "-f", "5", "-m", "5", "127.0.0.1", NULL};
+	char *ttl_before_m[] = {"ft_traceroute", "-f", "6", "-m", "5", "127.0.0.1", NULL};
+	char *wait_zero[] = {"ft_traceroute", "-w", "0", "127.0.0.1", NULL};
+	char *wait_long[] = {"ft_traceroute", "-w", "61", "127.0.0.1", NULL};
+	char *tos_high[] = {"ft_traceroute", "-t", "256", "127.0.0.1", NULL};
+	char *tos_neg[] = {"ft_traceroute", "-t", "-1", "127.0.0.1", NULL};
+	char *gone[] = {"ft_traceroute", "-l", "1", "127.0.0.1", NULL};
+
+	CHECK_INT(parse(&tr, &opts, 8, good), 0);
+	CHECK_INT(opts.first_ttl, 4);
+	CHECK_INT(opts.waittime, 2);
+	CHECK_INT(opts.tos, 16);
+	CHECK_INT(parse(&tr, &opts, 5, long_good), 0);
+	CHECK_INT(opts.first_ttl, 3);
+	CHECK_INT(opts.waittime, 7);
+	CHECK_INT(opts.tos, 255);
+	CHECK_INT(parse(&tr, &opts, 4, zero_tos), 0);
+	CHECK_INT(parse(&tr, &opts, 4, ttl_zero), 1);
+	CHECK_INT(parse(&tr, &opts, 4, ttl_high), 1); /* above the default 30 hops */
+	CHECK_INT(parse(&tr, &opts, 6, ttl_equal), 0);
+	CHECK_INT(parse(&tr, &opts, 6, ttl_before_m), 1);
+	CHECK_INT(parse(&tr, &opts, 4, wait_zero), 1);
+	CHECK_INT(parse(&tr, &opts, 4, wait_long), 1);
+	CHECK_INT(parse(&tr, &opts, 4, tos_high), 1);
+	CHECK_INT(parse(&tr, &opts, 4, tos_neg), 1);
+	CHECK_INT(parse(&tr, &opts, 4, gone), 1);
+}
+#else
+static void test_bonus_flags_absent(void) {
+	t_traceroute tr;
+	t_options opts;
+	char *flags[] = {"-f", "-w", "-t", "-s", "-i", "-l"};
+
+	for (size_t i = 0; i < sizeof(flags) / sizeof(flags[0]); i++) {
+		char *argv[] = {"ft_traceroute", flags[i], "1", "127.0.0.1", NULL};
+
+		CHECK_INT(parse(&tr, &opts, 4, argv), 1);
+	}
+}
+#endif
 
 static void test_options_after_destination(void) {
 	t_traceroute tr;
@@ -239,8 +291,13 @@ int main(void) {
 	RUN(test_numeric_options);
 	RUN(test_numeric_flag);
 	RUN(test_long_options);
+#ifdef FT_BONUS
 	RUN(test_string_options);
 	RUN(test_repeated_string_option);
+	RUN(test_bonus_numbers);
+#else
+	RUN(test_bonus_flags_absent);
+#endif
 	RUN(test_options_after_destination);
 	RUN(test_queries_bounds);
 	RUN(test_rejected_queries_keep_default);

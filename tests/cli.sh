@@ -35,6 +35,25 @@ if "$BIN" --help | grep -q -- '^  -n '; then
 else
 	expect "-n is not in the mandatory build" 1 "usage error" -n 127.0.0.1
 fi
+# -f -w -t -s -i exist only in the bonus build
+if "$BIN" --help | grep -q -- '^  -f,'; then
+	expect "first ttl zero"        1 "first hop out of range" -f 0 127.0.0.1
+	expect "first ttl above max"   1 "first hop out of range" -f 5 -m 3 127.0.0.1
+	expect "first ttl not a number" 1 "first hop out of range" -f abc 127.0.0.1
+	expect "wait zero"             1 "invalid wait time value" -w 0 127.0.0.1
+	expect "wait too long"         1 "invalid wait time value" -w 61 127.0.0.1
+	expect "wait not a number"     1 "invalid wait time value" -w x 127.0.0.1
+	expect "tos above 255"         1 "invalid TOS value" -t 256 127.0.0.1
+	expect "tos negative"          1 "invalid TOS value" -t -1 127.0.0.1
+	expect "tos not a number"      1 "invalid TOS value" -t x 127.0.0.1
+	expect "help lists -f"         0 "--first-ttl" --help
+	expect "help lists -i"         0 "--interface" --help
+else
+	for flag in -f -w -t -s -i; do
+		expect "$flag is not in the mandatory build" 1 "usage error" "$flag" 1 127.0.0.1
+	done
+fi
+expect "-l is gone"            1 "usage error" -l 1 127.0.0.1
 expect "queries 0"             1 "no more than 10 probes per hop" -q 0 127.0.0.1
 expect "queries 11"            1 "no more than 10 probes per hop" -q 11 127.0.0.1
 expect "queries negative"      1 "no more than 10 probes per hop" -q -1 127.0.0.1
