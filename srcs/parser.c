@@ -26,8 +26,6 @@ void initialize_program(t_options *options, t_traceroute *traceroute) {
 void free_options(t_options *options) {
 	free(options->interface);
 	free(options->src_addr);
-	free(options->tos);
-	free(options->flowlabel);
 }
 
 void print_options(t_options *options) {
@@ -37,15 +35,16 @@ void print_options(t_options *options) {
 void print_help(void) {
 	printf("Usage: ft_traceroute [options] <destination>\n");
 	printf("Options:\n");
-	printf("  -i, --interface <interface>   Interface to use\n");
 	printf("  -m, --max-hops <hops>         Maximum number of hops\n");
 	printf("  -p, --port <port>             Port to use\n");
-	printf("  -s, --source <address>        Source address\n");
 	printf("  -q, --queries <queries>       Number of queries per hop\n");
 	printf("  -N, --sim-queries <queries>   Number of simultaneous queries\n");
-	printf("  -t, --tos <tos>               Type of service\n");
-	printf("  -l, --flowlabel <label>       Flow label\n");
 #ifdef FT_BONUS
+	printf("  -f, --first-ttl <ttl>         Start from this hop (default 1)\n");
+	printf("  -w, --wait <seconds>          Seconds to wait for each reply (default 5)\n");
+	printf("  -t, --tos <tos>               Type of service, 0-255\n");
+	printf("  -s, --source <address>        Source address of the probes\n");
+	printf("  -i, --interface <interface>   Send the probes through this interface\n");
 	printf("  -n                            Do not resolve IP addresses to host names\n");
 #endif
 	printf("  --help                        Show this help message\n");
@@ -79,18 +78,21 @@ static int parse_int_option(const char *arg, long min, long max, int *out, const
 }
 
 #ifdef FT_BONUS
-#define SHORT_OPTIONS "i:m:p:s:q:N:t:l:n"
+#define SHORT_OPTIONS "m:p:q:N:f:w:t:s:i:n"
 #else
-#define SHORT_OPTIONS "i:m:p:s:q:N:t:l:"
+#define SHORT_OPTIONS "m:p:q:N:"
 #endif
 
 int parse_options(int argc, char **argv, t_traceroute *traceroute, t_options *options) {
 	int opt;
 	struct option long_options[] = {
-	    {"interface", required_argument, NULL, 'i'}, {"max-hops", required_argument, NULL, 'm'},
-	    {"port", required_argument, NULL, 'p'},      {"source", required_argument, NULL, 's'},
+	    {"max-hops", required_argument, NULL, 'm'},  {"port", required_argument, NULL, 'p'},
 	    {"queries", required_argument, NULL, 'q'},   {"sim-queries", required_argument, NULL, 'N'},
-	    {"tos", required_argument, NULL, 't'},       {"flowlabel", required_argument, NULL, 'l'},
+#ifdef FT_BONUS
+	    {"first-ttl", required_argument, NULL, 'f'}, {"wait", required_argument, NULL, 'w'},
+	    {"tos", required_argument, NULL, 't'},       {"source", required_argument, NULL, 's'},
+	    {"interface", required_argument, NULL, 'i'},
+#endif
 	    {"help", no_argument, NULL, OPT_HELP},       {NULL, 0, NULL, 0}};
 
 	if (argc < 2) {
@@ -99,10 +101,6 @@ int parse_options(int argc, char **argv, t_traceroute *traceroute, t_options *op
 	}
 	while ((opt = getopt_long(argc, argv, SHORT_OPTIONS, long_options, NULL)) != -1) {
 		switch (opt) {
-			case 'i':
-				free(options->interface);
-				options->interface = ft_strdup(optarg);
-				break;
 			case 'm':
 				if (parse_int_option(optarg, 1, MAX_HOPS, &options->max_hops, "invalid hops value"))
 					return 1;
@@ -110,10 +108,6 @@ int parse_options(int argc, char **argv, t_traceroute *traceroute, t_options *op
 			case 'p':
 				if (parse_int_option(optarg, 1, MAX_PORT, &options->port, "invalid port value"))
 					return 1;
-				break;
-			case 's':
-				free(options->src_addr);
-				options->src_addr = ft_strdup(optarg);
 				break;
 			case 'q': {
 				long nqueries;
@@ -130,15 +124,29 @@ int parse_options(int argc, char **argv, t_traceroute *traceroute, t_options *op
 				                     "invalid simultaneous probes value"))
 					return 1;
 				break;
-			case 't':
-				free(options->tos);
-				options->tos = ft_strdup(optarg);
-				break;
-			case 'l':
-				free(options->flowlabel);
-				options->flowlabel = ft_strdup(optarg);
-				break;
 #ifdef FT_BONUS
+			case 'f':
+				if (parse_int_option(optarg, 1, MAX_HOPS, &options->first_ttl,
+				                     "first hop out of range"))
+					return 1;
+				break;
+			case 'w':
+				if (parse_int_option(optarg, 1, MAX_WAIT, &options->waittime,
+				                     "invalid wait time value"))
+					return 1;
+				break;
+			case 't':
+				if (parse_int_option(optarg, 0, MAX_TOS, &options->tos, "invalid TOS value"))
+					return 1;
+				break;
+			case 's':
+				free(options->src_addr);
+				options->src_addr = ft_strdup(optarg);
+				break;
+			case 'i':
+				free(options->interface);
+				options->interface = ft_strdup(optarg);
+				break;
 			case 'n':
 				options->names = NAMES_HIDDEN;
 				break;
@@ -154,6 +162,10 @@ int parse_options(int argc, char **argv, t_traceroute *traceroute, t_options *op
 
 	if (optind >= argc) {
 		fprintf(stderr, "ft_traceroute: usage error: Destination address required\n");
+		return 1;
+	}
+	if (options->first_ttl > options->max_hops) {
+		fprintf(stderr, "ft_traceroute: first hop out of range `%d'\n", options->first_ttl);
 		return 1;
 	}
 	/* every probe uses its own destination port, so they must all fit below 65535 */

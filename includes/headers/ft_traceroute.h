@@ -27,6 +27,8 @@
 #define MAX_PORT            65535
 #define EXIT_ERROR          2 /* same code real traceroute uses for resolve/socket/send errors */
 #define DEFAULT_SIM_QUERIES 16
+#define MAX_WAIT            60
+#define MAX_TOS             255
 
 /* How a hop answering is shown. The mandatory build never resolves names; `make bonus`
  * looks them up by default and has -n to turn that off, like real traceroute. */
@@ -80,10 +82,9 @@ typedef struct s_options {
 	int port;
 	int squeries;
 	t_names_mode names;
+	int tos;
 	char *interface;
 	char *src_addr;
-	char *tos;
-	char *flowlabel;
 } t_options;
 
 typedef struct s_traceroute {
@@ -114,7 +115,9 @@ void close_socket(int sockfd);
 int resolve_address(t_traceroute *traceroute);
 int set_socket_ttl(int sockfd, int ttl);
 int set_socket_timestamps(int sockfd);
-int bind_udp_socket(int sockfd, uint16_t *port);
+int bind_udp_socket(int sockfd, const char *src_addr, uint16_t *port);
+int set_socket_tos(int sockfd, int tos);
+int bind_socket_device(int sockfd, const char *interface);
 
 // exec.c
 int exec_traceroute(t_traceroute *traceroute, t_options *options);

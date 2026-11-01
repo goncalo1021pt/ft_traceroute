@@ -30,13 +30,17 @@ int create_udp_socket(void) {
 /* Binds the probe socket to a port picked by the kernel and returns it (host order).
  * Every probe leaves from that port, which is how we recognise the replies to our own
  * probes and ignore anything else that reaches the raw socket. */
-int bind_udp_socket(int sockfd, uint16_t *port) {
+int bind_udp_socket(int sockfd, const char *src_addr, uint16_t *port) {
 	struct sockaddr_in addr;
 	socklen_t len = sizeof(addr);
 
 	ft_bzero(&addr, sizeof(addr));
 	addr.sin_family = AF_INET;
 	addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	if (src_addr && inet_pton(AF_INET, src_addr, &addr.sin_addr) != 1) {
+		fprintf(stderr, "ft_traceroute: invalid source address `%s'\n", src_addr);
+		return -1;
+	}
 	if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0 ||
 	    getsockname(sockfd, (struct sockaddr *)&addr, &len) < 0) {
 		perror("ft_traceroute: bind failed");
@@ -55,6 +59,24 @@ void close_socket(int sockfd) {
 int set_socket_ttl(int sockfd, int ttl) {
 	if (setsockopt(sockfd, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl)) < 0) {
 		perror("ft_traceroute: setsockopt TTL failed");
+		return -1;
+	}
+	return 0;
+}
+
+int set_socket_tos(int sockfd, int tos) {
+	if (setsockopt(sockfd, IPPROTO_IP, IP_TOS, &tos, sizeof(tos)) < 0) {
+		perror("ft_traceroute: setsockopt TOS failed");
+		return -1;
+	}
+	return 0;
+}
+
+int bind_socket_device(int sockfd, const char *interface) {
+	if (setsockopt(sockfd, SOL_SOCKET, SO_BINDTODEVICE, interface,
+	               (socklen_t)ft_strlen(interface)) < 0) {
+		fprintf(stderr, "ft_traceroute: cannot use interface `%s': %s\n", interface,
+		        strerror(errno));
 		return -1;
 	}
 	return 0;

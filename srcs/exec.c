@@ -9,6 +9,19 @@ void print_traceroute_header(t_traceroute *traceroute, const t_options *options)
 	          ip_str, options->max_hops, PACKET_SIZE);
 }
 
+#ifdef FT_BONUS
+/* -t, -i: options that act on the sockets themselves (-s is applied when binding) */
+static int apply_socket_options(const t_traceroute *traceroute, const t_options *options) {
+	if (options->tos && set_socket_tos(traceroute->send_sockfd, options->tos) < 0)
+		return -1;
+	if (options->interface &&
+	    (bind_socket_device(traceroute->send_sockfd, options->interface) < 0 ||
+	     bind_socket_device(traceroute->sockfd, options->interface) < 0))
+		return -1;
+	return 0;
+}
+#endif
+
 int init_traceroute(t_traceroute *traceroute, const t_options *options) {
 
 	if (resolve_address(traceroute) != 0)
@@ -24,8 +37,14 @@ int init_traceroute(t_traceroute *traceroute, const t_options *options) {
 		return -1;
 	}
 
-	if (bind_udp_socket(traceroute->send_sockfd, &traceroute->src_port) < 0 ||
+#ifdef FT_BONUS
+	if (apply_socket_options(traceroute, options) < 0 ||
+	    bind_udp_socket(traceroute->send_sockfd, options->src_addr, &traceroute->src_port) < 0 ||
 	    set_socket_timestamps(traceroute->sockfd) < 0) {
+#else
+	if (bind_udp_socket(traceroute->send_sockfd, NULL, &traceroute->src_port) < 0 ||
+	    set_socket_timestamps(traceroute->sockfd) < 0) {
+#endif
 		close_socket(traceroute->sockfd);
 		close_socket(traceroute->send_sockfd);
 		return -1;
