@@ -28,6 +28,14 @@
 #define EXIT_ERROR          2 /* same code real traceroute uses for resolve/socket/send errors */
 #define DEFAULT_SIM_QUERIES 16
 
+/* How a hop answering is shown. The mandatory build never resolves names; `make bonus`
+ * looks them up by default and has -n to turn that off, like real traceroute. */
+typedef enum e_names_mode {
+	NAMES_NONE,   /* 10.0.0.1 (10.0.0.1)  */
+	NAMES_LOOKUP, /* router.lan (10.0.0.1) */
+	NAMES_HIDDEN  /* 10.0.0.1             */
+} t_names_mode;
+
 typedef enum e_long_options {
 	OPT_HELP = 1000
 } t_long_options;
@@ -71,6 +79,7 @@ typedef struct s_options {
 	int waittime;
 	int port;
 	int squeries;
+	t_names_mode names;
 	char *interface;
 	char *src_addr;
 	char *tos;
@@ -119,7 +128,9 @@ void format_marker(int type, int code, char *buf, size_t size);
 int trace_route(t_traceroute *traceroute, const t_options *options);
 
 // output.c
+#ifdef FT_BONUS
 void get_hostname(const struct sockaddr_in *addr, char *hostname, size_t len, char *ip_str);
-void print_hop(int ttl, const t_probe *probes, int nprobes);
+#endif
+void print_hop(int ttl, const t_probe *probes, int nprobes, t_names_mode names);
 
 #endif

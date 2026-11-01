@@ -47,6 +47,22 @@ printf '%s\n' "$out" | head -n 1 | grep -qF 'ft_traceroute to 127.0.0.1 (127.0.0
 printf '%s\n' "$out" | sed -n 2p | grep -qE '^ 1  .*\(127\.0\.0\.1\)' &&
 	pass || fail "hop line format" "$(printf '%s\n' "$out" | sed -n 2p)"
 
+# Names: the mandatory build never resolves them (it prints "ip (ip)"), the bonus build
+# does (and -n turns it off). The mandatory binary must not even contain the lookup call.
+if "$BIN" --help | grep -q -- '^  -n '; then
+	line=$("$BIN" 127.0.0.1 2>&1 | sed -n 2p)
+	printf '%s\n' "$line" | grep -qE '^ 1  localhost \(127\.0\.0\.1\)  ' && pass || fail "bonus resolves names" "$line"
+	line=$("$BIN" -n 127.0.0.1 2>&1 | sed -n 2p)
+	printf '%s\n' "$line" | grep -qE '^ 1  127\.0\.0\.1  [0-9.]+ ms  [0-9.]+ ms  [0-9.]+ ms$' &&
+		pass || fail "-n prints the address only" "$line"
+else
+	line=$("$BIN" 127.0.0.1 2>&1 | sed -n 2p)
+	printf '%s\n' "$line" | grep -qE '^ 1  127\.0\.0\.1 \(127\.0\.0\.1\)  ' && pass || fail "mandatory prints ip (ip)" "$line"
+	if command -v nm >/dev/null 2>&1; then
+		nm "$BIN" 2>/dev/null | grep -q getnameinfo && fail "mandatory binary does no reverse DNS" || pass
+	fi
+fi
+
 # output must match real traceroute's layout: no trailing whitespace anywhere
 printf '%s\n' "$out" | grep -q '[[:space:]]$' && fail "no trailing whitespace" "$(printf '%s\n' "$out" | cat -A)" || pass
 printf '%s\n' "$out" | sed -n 2p | grep -qE '^ 1  [^ ]+ \(127\.0\.0\.1\)  [0-9.]+ ms  [0-9.]+ ms  [0-9.]+ ms$' &&
